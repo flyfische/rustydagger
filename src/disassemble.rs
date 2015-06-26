@@ -1,8 +1,8 @@
-use std::io::prelude::*;
-use std::fs::File;
+#[allow(dead_code)]
 fn format(hex: u8) -> String {
     format!("{:01$x}", hex, 2)
 }
+#[allow(dead_code)]
 pub fn disassemble(buffer: Vec<u8>) {
     let mut pc: usize = 0;
     while pc < buffer.len() {
@@ -265,7 +265,6 @@ pub fn disassemble(buffer: Vec<u8>) {
             0xff => { println!("RST     7"); pc = pc + 1; },
             _ => { println!("unknown"); pc = pc + 1; },
         }
-
     }
 }
 
