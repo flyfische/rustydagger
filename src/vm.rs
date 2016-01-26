@@ -1,5 +1,4 @@
 #![allow(dead_code)]
-use std::io::Write;
 use std::time::Duration;
 use std::thread;
 use std::num::Wrapping;
@@ -48,15 +47,13 @@ impl Vm {
             },
             0xc3 => {
                 // JMP addr
-                let mut new_pc: u16 = (self.memory[self.pc + 2] as u16) << 8;
-                new_pc = new_pc | (self.memory[self.pc + 1] as u16);
-                self.pc =  new_pc as usize;
+                self.pc =  self.merge_addr_pair(self.memory[self.pc + 1],
+                                                self.memory[self.pc + 2]) as usize;
             },
             0x31 => {
                 // LXI SP, D16
-                let mut new_pc: u16 = (self.memory[self.pc + 2] as u16) << 8;
-                new_pc = new_pc | (self.memory[self.pc + 1] as u16);
-                self.sp = new_pc as usize;
+                self.sp = self.merge_addr_pair(self.memory[self.pc + 1],
+                                               self.memory[self.pc + 2]) as usize;
                 self.pc += 3;
             },
             0x06 => {
@@ -66,14 +63,12 @@ impl Vm {
             },
             0xcd => {
                 // CALL
-                let mut new_pc: u16 = (self.memory[self.pc + 2] as u16) << 8;
-                new_pc = new_pc | (self.memory[self.pc + 1] as u16);
-                let ret_addr: u16 = (self.sp + 2) as u16;
-
+                let ret_addr: u16 = (self.pc + 2) as u16;
                 self.memory[self.sp - 1] = ((ret_addr >> 8) & 0xff) as u8;
                 self.memory[self.sp - 2] = (ret_addr & 0xff) as u8;
                 self.sp -= 2;
-                self.pc = new_pc as usize;
+                self.pc = self.merge_addr_pair(self.memory[self.pc+1],
+                                               self.memory[self.pc+2]) as usize;
             },
             0x11 => {
                 // LXI D, D16
@@ -104,7 +99,7 @@ impl Vm {
             },
             0x23 => {
                 // INX H
-                self.l += 1;
+                self.l = self.floating_point_add(self.l, 1);
                 if self.l == 0 {
                     self.h += 1;
                 }
@@ -112,7 +107,7 @@ impl Vm {
             },
             0x13 => {
                 // INX D
-                self.e += 1;
+                self.e = self.floating_point_add(self.e,1);
                 if self.e == 0 {
                     self.d += 1;
                 }
@@ -120,7 +115,8 @@ impl Vm {
             },
             0x05 => {
                 // DCR B
-                let mut res: u8 = (Wrapping(self.b) - Wrapping(1)).0;
+                
+                let res: u8 = self.floating_point_sub(self.b, 1);
                 self.condition_codes.z = (res == 0) as u8;
                 self.condition_codes.s = (0x80 == (res & 0x80)) as u8;
                 self.condition_codes.p = self.parity(res);
@@ -128,19 +124,89 @@ impl Vm {
                 self.pc += 1;
             },
             0xc2 => {
-                let mut new_pc: u16 = (self.memory[self.pc + 2] as u16) << 8;
-                new_pc = new_pc | (self.memory[self.pc + 1] as u16);
+                // JNZ
                 if self.condition_codes.z == 0 {
-                    self.pc = new_pc as usize;
+                    self.pc = self.merge_addr_pair(self.memory[self.pc+1], 
+                                                   self.memory[self.pc+2]) as usize;
                 }
                 else {
                     self.pc += 2;
                 }
             },
-
+            0xc9 => {
+                // RET
+                self.pc = self.merge_addr_pair(self.memory[self.sp],
+                                               self.memory[self.sp + 1]) as usize;
+                self.sp += 2;
+            },
+            0x19 => {
+                // DAD D
+                let mut hl: u32 = ((self.h as u32) << 8) | (self.l as u32);
+                let mut de: u32 = ((self.d as u32) << 8) | (self.e as u32);
+                let res: u32 = hl + de;
+                self.h = ((res & 0xff00) >> 8) as u8;
+                self.l = (res & 0xff) as u8;
+                self.condition_codes.cy = ((res & 0xffff0000) != 0) as u8;
+                self.pc += 1;
+            },
+            0x3e => {
+                // MVI A, D8
+                self.a = self.memory[self.pc + 1];
+                self.pc += 2;
+            },
+            0x32 => {
+                // STA word
+                let offset: u16 = self.merge_addr_pair(self.memory[self.pc + 1],
+                                                       self.memory[self.pc + 2]);
+                self.memory[offset as usize] = self.a;
+                self.pc += 3;
+            },
+            0xaf => {
+                // XRA A
+                self.a = self.a ^ self.a;
+                self.logic_flags_a();
+                self.pc += 1;
+            },
+            0xd3 => {
+                // OUT D8
+                // NOT IMPLEMENTED YET
+                self.pc += 2;
+            },
+            0xfb => {
+                // EI
+                // Enable interrupt?
+                self.int_enable = 1;
+                self.pc += 1;
+            },
+            0x3a => {
+                // LDA word
+                let offset: u16 = self.merge_addr_pair(self.memory[self.pc + 1],
+                                                       self.memory[self.pc + 2]);
+                self.a = self.memory[offset as usize];
+                self.pc += 3;
+            },
+            0xa7 => {
+                // ANA A
+                self.a = self.a & self.a;
+                self.logic_flags_a();
+                self.pc += 1;
+            },
            _ => { self.unimplemented_instruction(opcode); }
 
         }
+    }
+    fn merge_addr_pair(&self, lo: u8, hi: u8) -> u16 {
+        let mut new_addr: u16 = (hi as u16) << 8;
+        new_addr = new_addr | (lo as u16);
+        new_addr
+    }
+    fn floating_point_add(&self, x: u8, y:u8) -> u8 {
+        // We need to wrap these to allow overflows
+        (Wrapping(x) + Wrapping(y)).0
+    }
+    fn floating_point_sub(&self, x: u8, y: u8) -> u8 {
+        // We need to wrap these to allow overflows
+        (Wrapping(x) - Wrapping(y)).0
     }
     fn parity(&mut self, mut res: u8) -> u8 {
         let mut p: i32 = 0;
@@ -151,6 +217,14 @@ impl Vm {
             res = res >> 1;
         }
         (0 == (p & 0x1)) as u8
+    }
+    fn logic_flags_a(&mut self) {
+        self.condition_codes.cy = 0;
+        self.condition_codes.ac = 0;
+        self.condition_codes.z = (self.a == 0) as u8;
+        self.condition_codes.s = (0x80 == (self.a & 0x80)) as u8;
+        let a: u8 = self.a;
+        self.condition_codes.p = self.parity(a);
     }
     fn unimplemented_instruction(&self, opcode: u8) {
         panic!("Reached unimplemented opcode: 0x{}", format!("{:01$x}", opcode, 2));
@@ -165,11 +239,13 @@ impl Vm {
        println!("size: {}", self.memory.len());
    }
     pub fn run(&mut self) {
+        let mut cycle: i32 = 0;
         loop {
             self.run_current_opcode();
-            println!("{} => {}", format!("{:01$x}", self.pc, 4), 
+            println!("Cycle {} - {} => {}", cycle, format!("{:01$x}", self.pc, 4), 
                      format!("{:01$x}", self.memory[self.pc], 2));
 //            thread::sleep(Duration::from_millis(300));
+            cycle += 1;
         }
     }
 
