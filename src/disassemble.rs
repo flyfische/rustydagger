@@ -6,6 +6,7 @@ fn format(hex: u8) -> String {
 pub fn disassemble(buffer: Vec<u8>) {
     let mut pc: usize = 0;
     while pc < buffer.len() {
+        print!("0x{} ", format!("{:01$x}", pc, 4));
         match buffer[pc] {
             0x00 => { println!("NOP"); pc += 1; },
             0x01 => { println!("LXI     B,${}{}", format(buffer[pc+2]), format(buffer[pc+1])); pc += 3; },
