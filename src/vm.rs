@@ -2,6 +2,7 @@
 use std::time::Duration;
 use std::thread;
 use std::num::Wrapping;
+use std::fmt;
 /*
     This is the implementation of the VM itself.  
     I'm testing this on the Space Invaders rom, which only uses around 50 of the 256 instructions. 
@@ -17,7 +18,7 @@ struct ConditionCodes {
     ac: u8,
     pad: u8,
 }
-#[derive(Debug, Default)]
+#[derive(Default)]
 pub struct Vm {
     // State
     a: u8,
@@ -33,9 +34,16 @@ pub struct Vm {
     memory: Vec<u8>,
     condition_codes: ConditionCodes,
 }
-
+impl fmt::Debug for Vm {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Vm {{\n\t a: {}\n\t b: {}\n\t c: {}\n\t d: {}\n\t e: {}\n\t h: {}\n\t \
+        l: {}\n\t sp: {}\n\t pc: {}\n\t int_enable: {}\n\t condition_codes:\n {:#?}\n }}",
+        self.a, self.b, self.c, self.d, self.e, self.h, self.l, self.sp,
+        self.pc, self.int_enable, self.condition_codes)
+    }
+}
 impl Vm {
-    fn run_current_opcode(&mut self) {
+    pub fn run_current_opcode(&mut self) {
         let opcode: u8 = self.memory[self.pc];
         match opcode {
             0x00 => { self.pc += 1;  }, 
@@ -141,8 +149,8 @@ impl Vm {
             },
             0x19 => {
                 // DAD D
-                let mut hl: u32 = ((self.h as u32) << 8) | (self.l as u32);
-                let mut de: u32 = ((self.d as u32) << 8) | (self.e as u32);
+                let hl: u32 = ((self.h as u32) << 8) | (self.l as u32);
+                let de: u32 = ((self.d as u32) << 8) | (self.e as u32);
                 let res: u32 = hl + de;
                 self.h = ((res & 0xff00) >> 8) as u8;
                 self.l = (res & 0xff) as u8;
@@ -238,16 +246,16 @@ impl Vm {
        self.memory[..rom.len()].clone_from_slice(&mut rom);
        println!("size: {}", self.memory.len());
    }
+    pub fn print_debug(&self) {
+        println!("{} => {}", format!("{:01$x}", self.pc, 4), 
+             format!("{:01$x}", self.memory[self.pc], 2));
+    }
     pub fn run(&mut self) {
-        let mut cycle: i32 = 0;
         loop {
             self.run_current_opcode();
-            println!("Cycle {} - {} => {}", cycle, format!("{:01$x}", self.pc, 4), 
-                     format!("{:01$x}", self.memory[self.pc], 2));
-//            thread::sleep(Duration::from_millis(300));
-            cycle += 1;
+            println!("\r{:#?}", self);
+            thread::sleep(Duration::from_millis(300));
         }
     }
-
 }
 
