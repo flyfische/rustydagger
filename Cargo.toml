@@ -4,3 +4,4 @@ version = "0.1.0"
 authors = ["Cyrus Hilliard <cyrus@spssoftware.com>"]
 [dependencies]
 ncurses = "5.80.0" 
+time = "0.1"

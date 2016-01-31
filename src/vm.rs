@@ -30,8 +30,8 @@ pub struct Vm {
     l: u8,
     sp: usize,            // Stack Pointer
     pc: usize,            // Program Counter
-    int_enable: u8,
-    memory: Vec<u8>,
+    pub int_enable: u8,
+    pub memory: Vec<u8>,
     condition_codes: ConditionCodes,
 }
 impl fmt::Debug for Vm {
@@ -178,6 +178,7 @@ impl Vm {
             0xd3 => {
                 // OUT D8
                 // NOT IMPLEMENTED YET
+                println!("OUT: {}", self.memory[self.pc + 1]);
                 self.pc += 2;
             },
             0xfb => {
@@ -203,10 +204,21 @@ impl Vm {
 
         }
     }
+    pub fn generate_interrupt(&mut self, interrupt_num: i32) {
+        let pc: u16 = self.pc as u16;
+        self.push_stack(((pc & 0xff00) >> 8) as u8, (pc & 0xff) as u8);
+        self.pc = (8 * interrupt_num) as usize;
+        self.int_enable = 0;
+    }
     fn merge_addr_pair(&self, lo: u8, hi: u8) -> u16 {
         let mut new_addr: u16 = (hi as u16) << 8;
         new_addr = new_addr | (lo as u16);
         new_addr
+    }
+    fn push_stack(&mut self, hi: u8, lo: u8) {
+        self.memory[self.sp - 1] = hi;
+        self.memory[self.sp - 2] = lo;
+        self.sp -= 2;
     }
     fn floating_point_add(&self, x: u8, y:u8) -> u8 {
         // We need to wrap these to allow overflows
