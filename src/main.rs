@@ -23,6 +23,7 @@ fn main() {
         println!("Time: {}", time::precise_time_s());
         let mut last_interrupt: f64 = 0.0;
         let mut interrupt_num: i32 = 2;
+//        panic!("instruction: {}", vm.memory[0x1a3a]);
         initscr();        
         loop {
             vm.run_current_opcode();
@@ -33,8 +34,9 @@ fn main() {
                 }
             }
             mvprintw(0,0,format!("{:#?}", vm).as_str()); 
-//            thread::sleep(Duration::from_millis(50));
+            thread::sleep(Duration::from_millis(5));
             refresh();
+//            getch();
         }
     }
 }
