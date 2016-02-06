@@ -25,18 +25,26 @@ fn main() {
         let mut interrupt_num: i32 = 2;
 //        panic!("instruction: {}", vm.memory[0x1a3a]);
         initscr();        
+        let mut cycles: i32 = 0;
         loop {
+        
             vm.run_current_opcode();
             if  (time::precise_time_s() - last_interrupt) > 1.0/60.0  {
                 if vm.int_enable == 1 {
-                    vm.generate_interrupt(interrupt_num);
+                    //vm.generate_interrupt(interrupt_num);
                     last_interrupt = time::precise_time_s();
                 }
             }
             mvprintw(0,0,format!("{:#?}", vm).as_str()); 
-            thread::sleep(Duration::from_millis(5));
+//            thread::sleep(Duration::from_millis(5));
             refresh();
-//            getch();
+            cycles += 1;
+            mvprintw(25,0,format!("{}", cycles).as_str());
+            if cycles >= 420000 {
+                let mut file = File::create("screen.bmp").unwrap();
+                file.write_all(&vm.memory[0x2400..0x4000]);
+                getch();
+            }
         }
     }
 }
